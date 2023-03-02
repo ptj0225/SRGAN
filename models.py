@@ -5,11 +5,11 @@ def gen_block(x, include_bn=True, CNN=tf.keras.layers.Conv2D):
     x_ = x
     x = CNN(64, 3, padding='same')(x)
 
-    if include_bn: x = tf.keras.layers.BatchNormalization(renorm=True)(x)
+    if include_bn: x = tf.keras.layers.BatchNormalization()(x)
     x = tf.keras.layers.PReLU(shared_axes=[1,2])(x)
     x = CNN(64, 3, padding='same')(x)
 
-    if include_bn: x = tf.keras.layers.BatchNormalization(renorm=True)(x)
+    if include_bn: x = tf.keras.layers.BatchNormalization()(x)
     x = CNN(64, 3, padding='same')(x)
     x = tf.keras.layers.Add()([x_,x])
 
@@ -31,7 +31,7 @@ def get_generator(include_bn=True, separable_cnn=False):
     for _ in range(16): output = gen_block(output, include_bn, CNN)
 
     output = CNN(64, 3, padding='same')(output)
-    if include_bn: output = tf.keras.layers.BatchNormalization(renorm=True)(output)
+    if include_bn: output = tf.keras.layers.BatchNormalization()(output)
 
     output = tf.keras.layers.Add()([output, output_])
     output = tf.keras.layers.Conv2D(256, 3, padding='same')(output)
@@ -49,7 +49,7 @@ def get_generator(include_bn=True, separable_cnn=False):
 def dis_block(x,k,n,s,include_bn=True):
   x= tf.keras.layers.Conv2D(n, k, strides=s, padding='same')(x)
 
-  if include_bn: x = tf.keras.layers.BatchNormalization(renorm=True)(x)
+  if include_bn: x = tf.keras.layers.BatchNormalization()(x)
   x = tf.keras.layers.LeakyReLU(alpha=0.2)(x)
   
   return x

@@ -8,7 +8,6 @@ import os
 #load trained model / 학습된 이미지 불러오기
 Generator = tf.keras.models.load_model("Generator.h5")
 Generator.trainable = False
-Generator.summary()
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--target_folder', required=False, default="./test/", help='directory of image to process super resolution / super resolution 처리할 이미지 위치')

@@ -5,10 +5,11 @@ import matplotlib.pyplot as plt
 import os
 from models import get_generator, get_discriminator, get_feature_extractor
 import argparse
+from glob import glob
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--epochs', required=False, default=100, help='epochs')
-parser.add_argument('--batchs', required=False, default=16, help='batchs')
+parser.add_argument('--batchs', required=False, default=100, help='batchs')
 parser.add_argument('--lr_g', required=False, default=0.0001, help='learning rate of generator')
 parser.add_argument('--lr_d', required=False, default=0.0001, help='learning rate of discriminator')
 parser.add_argument('--train_dir', required=False, default="./train/", help='directory of image to train / 학습 할 이미지 위치')
@@ -40,7 +41,7 @@ if load_model:
         print('Discriminator loaded')
     else:
         print('Cant load Discriminator')
-        Discriminator = get_discriminator(include_bn=False)
+        Discriminator = get_discriminator(include_bn=True)
 
 else:
     Generator = get_generator(include_bn=True, separable_cnn=False)
@@ -61,11 +62,12 @@ optim_g = tf.optimizers.Adam(lr_g, beta_1=0.9)
 optim_d = tf.optimizers.Adam(lr_d, beta_1=0.9)
 update_alternate = 0
 iter_count = 1
+im_inx = glob(train_dir + "*.png")
+im_inx += glob(train_dir + "*.jpg")
 
-im_inx = list(map(lambda x: train_dir + x, os.listdir(train_dir)))
 for epoch in range(1, epochs+1):
     np.random.shuffle(im_inx)
-
+    ssmi_scores = []
     for i in range(1, len(im_inx)+1):
         try:
             img = cv2.imread(im_inx[i-1])
@@ -104,24 +106,18 @@ for epoch in range(1, epochs+1):
             imgs_tensor_sr[imgs_tensor_sr < 0] = 0
             imgs_tensor_hr = (imgs_tensor_hr + 1) / 2
 
-            print("epochs:", epoch, ", step:", i, len(im_inx), ", G loss:", round(np.mean(loss_g),5), ", D loss:", round(np.mean(loss_d), 5))
-            print("ssim:", np.mean(tf.image.ssim(imgs_tensor_sr, imgs_tensor_hr, max_val = 1).numpy()))
-            print('--------------------------------------------------------------------------')
+            print("\repochs:", epoch, ", step:", i, len(im_inx), ", G loss:", round(np.mean(loss_g),5), ", D loss:", round(np.mean(loss_d), 5), "ssim:", np.mean(tf.image.ssim(imgs_tensor_sr, imgs_tensor_hr, max_val = 1).numpy()), end="")
+            ssmi_scores.append(np.mean(tf.image.ssim(imgs_tensor_sr, imgs_tensor_hr, max_val = 1).numpy()))
 
             if update_alternate == 0:
                 optim_g.minimize(loss_g, Generator.trainable_variables, tape=tape)
-                if np.mean(hr_disc) <= 0.97 and np.mean(sr_disc) >= 0.03:
-                    update_alternate = 1
-                else:
-                    print('--------------------------------------------------------------------------')
-                    print(f"Skip train of discriminator. \nDiscriminator doesn't need to train yet.\n{np.mean(hr_disc)}, {np.mean(sr_disc)} ")
-                    print('--------------------------------------------------------------------------')
+                update_alternate = 1
+
             else:
                 optim_d.minimize(loss_d, Discriminator.trainable_variables, tape = tape)
                 update_alternate = 0
-
-            if iter_count % 10 == 0:
-                Generator.save('Generator.h5')
-                Discriminator.save('Discriminator.h5')
-                
             iter_count += 1
+            
+    print("\nepochs:", epoch, 'ssmi mean:', round(np.mean(ssmi_scores), 5))
+    Generator.save('Generator.h5')
+    Discriminator.save('Discriminator.h5')
