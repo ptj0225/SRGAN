@@ -64,6 +64,10 @@ update_alternate = 0
 iter_count = 1
 im_inx = glob(train_dir + "*.png")
 im_inx += glob(train_dir + "*.jpg")
+im_inx += glob(train_dir + "*.jpeg")
+im_inx += glob(train_dir + "*/*.png")
+im_inx += glob(train_dir + "*/*.jpg")
+im_inx += glob(train_dir + "*/*.jpeg")
 
 for epoch in range(1, epochs+1):
     np.random.shuffle(im_inx)
@@ -106,7 +110,7 @@ for epoch in range(1, epochs+1):
             imgs_tensor_sr[imgs_tensor_sr < 0] = 0
             imgs_tensor_hr = (imgs_tensor_hr + 1) / 2
 
-            print("\repochs:", epoch, ", step:", i, len(im_inx), ", G loss:", round(np.mean(loss_g),5), ", D loss:", round(np.mean(loss_d), 5), "ssim:", np.mean(tf.image.ssim(imgs_tensor_sr, imgs_tensor_hr, max_val = 1).numpy()), end="")
+            print("\repochs:", epoch, ", step:", i, len(im_inx), ", G loss:", round(np.mean(loss_g),5), ", D loss:", round(np.mean(loss_d), 5), "ssim:", round(np.mean(tf.image.ssim(imgs_tensor_sr, imgs_tensor_hr, max_val = 1).numpy()), 5), end="")
             ssmi_scores.append(np.mean(tf.image.ssim(imgs_tensor_sr, imgs_tensor_hr, max_val = 1).numpy()))
 
             if update_alternate == 0:
@@ -118,6 +122,10 @@ for epoch in range(1, epochs+1):
                 update_alternate = 0
             iter_count += 1
             
+            if iter_count % 1000 == 0:
+                Generator.save('Generator.h5')
+                Discriminator.save('Discriminator.h5')
+
     print("\nepochs:", epoch, 'ssmi mean:', round(np.mean(ssmi_scores), 5))
     Generator.save('Generator.h5')
     Discriminator.save('Discriminator.h5')
