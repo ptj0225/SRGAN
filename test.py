@@ -25,8 +25,6 @@ for i in range(len(img_dirs)):
     # Process super resoultion / 이미지에 super resoultion 적용
     img_sr = Generator.predict(np.expand_dims(img, 0))
     img_sr = np.array(img_sr[0] * 127.5 + 127.5)
-    img_sr[img_sr >= 255] = 255
-    img_sr[img_sr <= 1] = 1
     img_sr = np.array(img_sr, dtype=np.uint8)
 
     # Save processed image / 이미지 저장

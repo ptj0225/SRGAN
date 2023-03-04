@@ -9,9 +9,9 @@ from glob import glob
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--epochs', required=False, default=100, help='epochs')
-parser.add_argument('--batchs', required=False, default=100, help='batchs')
-parser.add_argument('--lr_g', required=False, default=0.00001, help='learning rate of generator')
-parser.add_argument('--lr_d', required=False, default=0.00001, help='learning rate of discriminator')
+parser.add_argument('--batchs', required=False, default=16, help='batchs')
+parser.add_argument('--lr_g', required=False, default=0.0001, help='learning rate of generator')
+parser.add_argument('--lr_d', required=False, default=0.0001, help='learning rate of discriminator')
 parser.add_argument('--train_dir', required=False, default="./train/", help='directory of image to train / 학습 할 이미지 위치')
 parser.add_argument('--load_model', required=False, default=True, help='load saved model / 저장된 모델 불러오기 (1: True, 0: False)')
 parser.add_argument('--use_cpu', required=False, default=False, help='forced to use CPU only / CPU 만 이용해 학습하기 (1: True, 0: False)')
@@ -65,11 +65,6 @@ optim_d = tf.optimizers.Adam(lr_d, beta_1=0.9)
 update_alternate = 0
 iter_count = 1
 im_inx = glob(train_dir + "*.png")
-im_inx += glob(train_dir + "*.jpg")
-im_inx += glob(train_dir + "*.jpeg")
-im_inx += glob(train_dir + "*/*.png")
-im_inx += glob(train_dir + "*/*.jpg")
-im_inx += glob(train_dir + "*/*.jpeg")
 
 for epoch in range(1, epochs+1):
     np.random.shuffle(im_inx)
@@ -77,14 +72,14 @@ for epoch in range(1, epochs+1):
     for i in range(1, len(im_inx)+1):
         try:
             img = cv2.imread(im_inx[i-1])
-            img = tf.image.random_crop(img, (96,96,3)).numpy()
+            img = tf.image.random_crop(img, (128,128,3)).numpy()
             imgs.append(img)
         except: 
             continue
 
         if len(imgs) >= batchs or epoch == epochs:
             imgs_tensor_hr = np.array(imgs, dtype=np.float32)
-            imgs_tensor_lr = tf.image.resize(imgs_tensor_hr, (24, 24), method=tf.image.ResizeMethod.BICUBIC).numpy()
+            imgs_tensor_lr = tf.image.resize(imgs_tensor_hr, (32, 32), method=tf.image.ResizeMethod.BICUBIC).numpy()
             imgs_tensor_hr = imgs_tensor_hr / 127.5 -1
             imgs_tensor_lr = imgs_tensor_lr / 255
             imgs = []
@@ -109,6 +104,7 @@ for epoch in range(1, epochs+1):
             imgs_tensor_sr[imgs_tensor_sr < 0] = 0
             imgs_tensor_hr = (imgs_tensor_hr + 1) / 2
 
+            print("\r", end="")
             print("\repochs:", epoch, ", step:", i, len(im_inx), ", G loss:", round(np.mean(loss_g),5), ", D loss:", round(np.mean(loss_d), 5), "ssim:", round(np.mean(tf.image.ssim(imgs_tensor_sr, imgs_tensor_hr, max_val = 1).numpy()), 5), end="")
             ssmi_scores.append(np.mean(tf.image.ssim(imgs_tensor_sr, imgs_tensor_hr, max_val = 1).numpy()))
 
@@ -121,10 +117,6 @@ for epoch in range(1, epochs+1):
                 update_alternate = 0
             iter_count += 1
             
-            if iter_count % 1000 == 0:
-                Generator.save('Generator.h5')
-                Discriminator.save('Discriminator.h5')
-
     print("\nepochs:", epoch, 'ssmi mean:', round(np.mean(ssmi_scores), 5))
     Generator.save('Generator.h5')
     Discriminator.save('Discriminator.h5')
