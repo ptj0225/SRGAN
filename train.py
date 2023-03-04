@@ -10,8 +10,8 @@ from glob import glob
 parser = argparse.ArgumentParser()
 parser.add_argument('--epochs', required=False, default=100, help='epochs')
 parser.add_argument('--batchs', required=False, default=100, help='batchs')
-parser.add_argument('--lr_g', required=False, default=0.0001, help='learning rate of generator')
-parser.add_argument('--lr_d', required=False, default=0.0001, help='learning rate of discriminator')
+parser.add_argument('--lr_g', required=False, default=0.00001, help='learning rate of generator')
+parser.add_argument('--lr_d', required=False, default=0.00001, help='learning rate of discriminator')
 parser.add_argument('--train_dir', required=False, default="./train/", help='directory of image to train / 학습 할 이미지 위치')
 parser.add_argument('--load_model', required=False, default=True, help='load saved model / 저장된 모델 불러오기 (1: True, 0: False)')
 parser.add_argument('--use_cpu', required=False, default=False, help='forced to use CPU only / CPU 만 이용해 학습하기 (1: True, 0: False)')
@@ -27,6 +27,7 @@ use_cpu =  args.use_cpu
 
 if use_cpu: os.environ["CUDA_VISIBLE_DEVICES"] = "-1"
 
+# 모델 불러오기 or 새로 생성하기
 if load_model:
 
     if os.path.isfile('Generator.h5'):
@@ -45,9 +46,10 @@ if load_model:
 
 else:
     Generator = get_generator(include_bn=True, separable_cnn=False)
-    Discriminator = get_discriminator(include_bn=False)
+    Discriminator = get_discriminator(include_bn=True)
 
-feature_extractor = get_feature_extractor(out_layer=10)
+# feature map 생성을 위한 feature extractor 선언
+feature_extractor = get_feature_extractor(out_layer=20)
 feature_extractor.trainable = False
 
 def RGB2BGR(image):
@@ -75,7 +77,6 @@ for epoch in range(1, epochs+1):
     for i in range(1, len(im_inx)+1):
         try:
             img = cv2.imread(im_inx[i-1])
-            img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
             img = tf.image.random_crop(img, (96,96,3)).numpy()
             imgs.append(img)
         except: 
@@ -94,16 +95,14 @@ for epoch in range(1, epochs+1):
                 sr_disc = Discriminator(imgs_tensor_sr)
                 imgs_tensor_sr_feature_map = feature_extractor(imgs_tensor_sr) / 12.75
                 imgs_tensor_hr_feature_map = feature_extractor(imgs_tensor_hr) / 12.75
-
                 loss_g = loss_d = 0
                 if update_alternate == 0:
-                    loss_g = bce(tf.ones(shape = sr_disc.shape), sr_disc) * 0.001
-                    loss_g += mse(tf.reshape(imgs_tensor_sr_feature_map, (len(imgs_tensor_sr), -1)), tf.reshape(imgs_tensor_hr_feature_map, (len(imgs_tensor_hr), -1)))
-                    loss_g = tf.math.reduce_mean(loss_g)
+                    loss_g = -tf.math.log(sr_disc) * 1e-3
+                    loss_g = tf.reshape(loss_g, shape=(-1))
+                    w, d = imgs_tensor_sr_feature_map.shape[1:3]
+                    loss_g += tf.reduce_sum(tf.square(imgs_tensor_sr_feature_map - imgs_tensor_hr_feature_map), axis=(1,2,3)) / (w*d)
                 else:
-                    loss_d = (bce(tf.zeros(shape = sr_disc.shape), sr_disc) + bce(tf.ones(shape = hr_disc.shape), hr_disc)) / 2
-                    loss_d = tf.math.reduce_mean(loss_d)
-
+                    loss_d = bce(tf.zeros(shape = sr_disc.shape), sr_disc) + bce(tf.ones(shape = hr_disc.shape), hr_disc)
             imgs_tensor_sr = imgs_tensor_sr.numpy()
             imgs_tensor_sr = (imgs_tensor_sr + 1) / 2
             imgs_tensor_sr[imgs_tensor_sr > 1] = 1
