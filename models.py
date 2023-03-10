@@ -70,8 +70,8 @@ def get_discriminator(include_bn=True):
 
     output = tf.keras.layers.Flatten()(output)
     output = tf.keras.layers.Dense(1024)(output)
-    output = tf.keras.layers.LeakyReLU(alpha=0.2)(output)
-    output = tf.keras.layers.Dense(1, activation='sigmoid')(output)
+    output = tf.keras.layers.ReLU()(output)
+    output = tf.keras.layers.Dense(1, activation='linear')(output)
     
     return tf.keras.Model(input, output)
 

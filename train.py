@@ -6,6 +6,16 @@ import os
 from models import get_generator, get_discriminator, get_feature_extractor
 import argparse
 from glob import glob
+import warnings
+
+warnings.filterwarnings(action='ignore')
+
+physical_devices = tf.config.list_physical_devices('GPU')
+try:
+  tf.config.experimental.set_memory_growth(physical_devices[0], True)
+except:
+  # Invalid device or cannot modify virtual devices once initialized.
+  pass
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--epochs', required=False, default=100, help='epochs')
@@ -62,12 +72,12 @@ mse = tf.losses.mean_squared_error
 bce = tf.losses.binary_crossentropy
 optim_g = tf.optimizers.Adam(lr_g, beta_1=0.9)
 optim_d = tf.optimizers.Adam(lr_d, beta_1=0.9)
-update_alternate = 0
 iter_count = 1
-im_inx = glob(train_dir + "*.png")
+im_inx = glob(train_dir + "*.png") + glob(train_dir + "*.jpg")
 
 for epoch in range(1, epochs+1):
     np.random.shuffle(im_inx)
+    train_history = {'ssmi': list(), 'd_loss': list(), 'g_loss': list(), 'mse_loss': list(), 'vgg_loss': list(), 'adv_loss': list()}
     ssmi_scores = []
     for i in range(1, len(im_inx)+1):
         try:
@@ -80,24 +90,47 @@ for epoch in range(1, epochs+1):
         if len(imgs) >= batchs or epoch == epochs:
             imgs_tensor_hr = np.array(imgs, dtype=np.float32)
             imgs_tensor_lr = tf.image.resize(imgs_tensor_hr, (32, 32), method=tf.image.ResizeMethod.BICUBIC).numpy()
+            imgs_tensor_lr[imgs_tensor_lr >= 255] = 255
+            imgs_tensor_lr[imgs_tensor_lr <= 0] = 0
             imgs_tensor_hr = imgs_tensor_hr / 127.5 -1
             imgs_tensor_lr = imgs_tensor_lr / 255
             imgs = []
 
+            # Upate D
+            imgs_tensor_sr = Generator(imgs_tensor_lr)
+            with tf.GradientTape() as tape:
+                hr_disc = Discriminator(imgs_tensor_hr)
+                sr_disc = Discriminator(imgs_tensor_sr)
+                loss_d = tf.reduce_mean(((hr_disc - 1) ** 2 + sr_disc**2) / 2)
+                train_history['loss_d'] = float(loss_d)
+            optim_d.minimize(loss_d, Discriminator.trainable_variables, tape = tape)
+
+            #Update G
             with tf.GradientTape() as tape:
                 imgs_tensor_sr = Generator(imgs_tensor_lr)
-                hr_disc = Discriminator(imgs_tensor_hr)
                 sr_disc = Discriminator(imgs_tensor_sr)
                 imgs_tensor_sr_feature_map = feature_extractor(imgs_tensor_sr) / 12.75
                 imgs_tensor_hr_feature_map = feature_extractor(imgs_tensor_hr) / 12.75
-                loss_g = loss_d = 0
-                if update_alternate == 0:
-                    loss_g = -tf.math.log(sr_disc) * 1e-3
-                    loss_g = tf.reshape(loss_g, shape=(-1))
-                    w, d = imgs_tensor_sr_feature_map.shape[1:3]
-                    loss_g += tf.reduce_sum(tf.square(imgs_tensor_sr_feature_map - imgs_tensor_hr_feature_map), axis=(1,2,3)) / (w*d)
-                else:
-                    loss_d = bce(tf.zeros(shape = sr_disc.shape), sr_disc) + bce(tf.ones(shape = hr_disc.shape), hr_disc)
+
+                adv_loss = tf.reduce_mean((sr_disc - 1) ** 2 / 2) * 0.1
+
+                w, d = imgs_tensor_sr_feature_map.shape[1:3]
+                vgg_loss = tf.reduce_sum(tf.square(imgs_tensor_sr_feature_map - imgs_tensor_hr_feature_map), axis=(1,2,3)) / (w*d)
+                vgg_loss = tf.reduce_mean(vgg_loss)
+
+                w, d = imgs_tensor_sr.shape[1:3]
+                mse_loss = tf.reduce_sum(tf.square(imgs_tensor_sr - imgs_tensor_hr) / (w*d), axis=(1,2,3))
+                mse_loss = tf.reduce_mean(mse_loss)
+
+                loss_g = adv_loss + vgg_loss + mse_loss
+
+                train_history['adv_loss'] = float(adv_loss)
+                train_history['vgg_loss'] = float(vgg_loss)
+                train_history['mse_loss'] = float(mse_loss)
+                train_history['loss_g'] = float(loss_g)
+
+            optim_g.minimize(loss_g, Generator.trainable_variables, tape=tape)
+
             imgs_tensor_sr = imgs_tensor_sr.numpy()
             imgs_tensor_sr = (imgs_tensor_sr + 1) / 2
             imgs_tensor_sr[imgs_tensor_sr > 1] = 1
@@ -105,18 +138,17 @@ for epoch in range(1, epochs+1):
             imgs_tensor_hr = (imgs_tensor_hr + 1) / 2
 
             print("\r", end="")
-            print("\repochs:", epoch, ", step:", i, len(im_inx), ", G loss:", round(np.mean(loss_g),5), ", D loss:", round(np.mean(loss_d), 5), "ssim:", round(np.mean(tf.image.ssim(imgs_tensor_sr, imgs_tensor_hr, max_val = 1).numpy()), 5), end="")
-            ssmi_scores.append(np.mean(tf.image.ssim(imgs_tensor_sr, imgs_tensor_hr, max_val = 1).numpy()))
-
-            if update_alternate == 0:
-                optim_g.minimize(loss_g, Generator.trainable_variables, tape=tape)
-                update_alternate = 1
-
-            else:
-                optim_d.minimize(loss_d, Discriminator.trainable_variables, tape = tape)
-                update_alternate = 0
+            print("\repochs:", epoch, ", step:", i, len(im_inx), ", G loss:", round(float(loss_g), 5), ", D loss:", round(float(loss_d), 5), "ssim:", round(np.mean(tf.image.ssim(imgs_tensor_sr, imgs_tensor_hr, max_val = 1).numpy()), 5), end="")
+            train_history['ssmi'].append(np.mean(tf.image.ssim(imgs_tensor_sr, imgs_tensor_hr, max_val = 1).numpy()))
             iter_count += 1
             
-    print("\nepochs:", epoch, 'ssmi mean:', round(np.mean(ssmi_scores), 5))
+    print("\nepochs:", epoch, 
+          'ssmi mean:', round(np.mean(train_history['ssmi']), 5), 
+          'loss_d', round(np.mean(train_history['loss_d']), 5), 
+          'loss_g', round(np.mean(train_history['loss_g']), 5), 
+          'adv_loss', round(np.mean(train_history['adv_loss']), 5), 
+          'vgg_loss', round(np.mean(train_history['vgg_loss']), 5), 
+          'mse_loss', round(np.mean(train_history['mse_loss']), 5))
+    
     Generator.save('Generator.h5')
     Discriminator.save('Discriminator.h5')
