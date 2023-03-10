@@ -2,29 +2,27 @@
 
 A Tenserflow implementation of SRGAN based on CVPR 2017 paper "Photo-Realistic Single Image Super-Resolution Using a Generative Adversarial Network".
 
-The train-datasets and valid-datasets are sampled from DIV2K. DIV2K-dataset has 800 images, and the models tested with Set 5 dataset.
+![Result_1](./result_1.png)
+
+![Result_2](./result_2.png)
+
+![Result_3](./result_3.png)
+
+# Usage
 
 Enviroment
-
     python          3.9.13
     tensorflow      2.11.0
     numpy           1.21.5
     opencv-python   4.6.0.66
-    
-# Usage
-
 
 ## Train 
 
-Put train image dataset at ./train folder.
-
-You can find useful dataset on [Visual Object Classes Challenge 2012 (VOC2012)](http://host.robots.ox.ac.uk/pascal/VOC/voc2012/index.html#data)
+Put train image([DIV2K DataSet](https://www.kaggle.com/datasets/joe1995/div2k-dataset)) dataset at ./train folder.
 
 To train dataset, type the code below on your cmd.
 
     python train.py
-
-Or you can choose directory to train by using arguments(--train_dir).
 
 optional arguments:
 

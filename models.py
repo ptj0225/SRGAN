@@ -56,7 +56,7 @@ def dis_block(x,k,n,s,include_bn=True):
 
 
 def get_discriminator(include_bn=True):
-    input = tf.keras.Input(shape=(96,96,3))
+    input = tf.keras.Input(shape=(128,128,3))
     output = tf.keras.layers.Conv2D(64, 3, 1, padding='same')(input)
     output = tf.keras.layers.LeakyReLU(alpha=0.2)(output)
 
@@ -70,8 +70,8 @@ def get_discriminator(include_bn=True):
 
     output = tf.keras.layers.Flatten()(output)
     output = tf.keras.layers.Dense(1024)(output)
-    output = tf.keras.layers.LeakyReLU(alpha=0.2)(output)
-    output = tf.keras.layers.Dense(1, activation='sigmoid')(output)
+    output = tf.keras.layers.ReLU()(output)
+    output = tf.keras.layers.Dense(1, activation='linear')(output)
     
     return tf.keras.Model(input, output)
 
