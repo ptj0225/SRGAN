@@ -11,6 +11,7 @@ A Tenserflow implementation of SRGAN based on CVPR 2017 paper "Photo-Realistic S
 # Usage
 
 Enviroment
+
     python          3.9.13
     tensorflow      2.11.0
     numpy           1.21.5
